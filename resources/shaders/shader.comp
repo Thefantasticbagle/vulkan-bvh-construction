@@ -66,6 +66,12 @@ layout(std140, binding = b_triangles) readonly buffer TriangleSSBOIn {
    RTTriangle trianglesIn [ ];
 };
 
+// BVH nodes
+layout(std140, binding = b_bvhnodes) readonly buffer BVHNodesSSBOIn {
+   BVHNode bvhNodesIn [ ];
+};
+
+
 // Viking room texture
 layout(binding = b_vikingroom) uniform sampler2D vikingroomSampler;
 
@@ -206,16 +212,25 @@ HitInfo RaySphere(Ray ray, RTSphere sphere) {
  * @return If the ray intersects the box at all.
  */
 bool RayBoundingBox(Ray ray, vec3 boxMin, vec3 boxMax) {
-    vec3    rayDirInverted = 1.0 / ray.dir,
-            boxMinRelative = (boxMin - ray.origin) * rayDirInverted,
-            boxMaxRelative = (boxMax - ray.origin) * rayDirInverted,
-            boxMinNew = min( boxMinRelative, boxMaxRelative ),
-            boxMaxNew = max( boxMinRelative, boxMaxRelative );
-    
-    float   maxMinAxis = max( max( boxMinNew.x, boxMinNew.y ), boxMinNew.z ),
-            minMaxAxis = min( min( boxMaxNew.x, boxMaxNew.y ), boxMaxNew.z );
+//    vec3    rayDirInverted = 1.0 / ray.dir,
+//            boxMinRelative = (boxMin - ray.origin) * rayDirInverted,
+//            boxMaxRelative = (boxMax - ray.origin) * rayDirInverted,
+//            boxMinNew = min( boxMinRelative, boxMaxRelative ),
+//            boxMaxNew = max( boxMinRelative, boxMaxRelative );
+//    
+//    float   maxMinAxis = max( max( boxMinNew.x, boxMinNew.y ), boxMinNew.z ),
+//            minMaxAxis = min( min( boxMaxNew.x, boxMaxNew.y ), boxMaxNew.z );
+//
+//    return maxMinAxis <= minMaxAxis;
 
-    return maxMinAxis <= minMaxAxis;
+    // https://jacco.ompf2.com/2022/04/13/how-to-build-a-bvh-part-1-basics/
+	float tx1 = (boxMin.x - ray.origin.x) / ray.dir.x, tx2 = (boxMax.x - ray.origin.x) / ray.dir.x;
+	float tmin = min( tx1, tx2 ), tmax = max( tx1, tx2 );
+	float ty1 = (boxMin.y - ray.origin.y) / ray.dir.y, ty2 = (boxMax.y - ray.origin.y) / ray.dir.y;
+	tmin = max( tmin, min( ty1, ty2 ) ), tmax = min( tmax, max( ty1, ty2 ) );
+	float tz1 = (boxMin.z - ray.origin.z) / ray.dir.z, tz2 = (boxMax.z - ray.origin.z) / ray.dir.z;
+	tmin = max( tmin, min( tz1, tz2 ) ), tmax = min( tmax, max( tz1, tz2 ) );
+	return tmax >= tmin && tmin < 1e30f && tmax > 0;
 }
 
 /**
@@ -380,9 +395,81 @@ vec3 Trace(Ray ray, inout uint seed) {
     return incomingLight + GetEnvironmentLight(ray) * rayColor;
 }
 
+/**
+ *  Traverses the BVH, checking for intersection against triangles.
+ */
+void RayBVH(const Ray ray, inout HitInfo closestHit, inout RTTriangle closestTriangle) {
+    BVHNode node = bvhNodesIn[0], stack[64];
+    uint stackPtr = 0;
+
+    while (true) {
+        // If ray misses node aabb, skip node
+        if (!RayBoundingBox(ray, node.aabbMin, node.aabbMax)) {
+            if (stackPtr == 0) break; else node = stack[--stackPtr]; continue;
+        }
+        
+        if (node.triCount > 0) {
+            // If the node is a leaf, intersect with primitive children
+            for (int i = 0; i < node.triCount; i++) {
+                RTTriangle triangle = trianglesIn[node.leftFirst + i];
+                HitInfo hitInfo = RayTriangle(ray, triangle);
+
+                if (hitInfo.didHit && ( closestHit.dist < 0 || hitInfo.dist < closestHit.dist )) {
+                    closestHit = hitInfo;
+                    closestTriangle = triangle;
+                }
+            }
+
+            if (stackPtr == 0) break; else node = stack[--stackPtr]; continue;
+        }
+
+        // Otherwise, append child nodes to the stack
+        stack[stackPtr++] = bvhNodesIn[node.leftFirst+1];
+        node = bvhNodesIn[node.leftFirst];
+    }
+
+    return;
+}
+
+/**
+ *  Checks every ray against every bvh, regardless of hierarchy. Slow.
+ */
+void RayAllBVH(const Ray ray, inout HitInfo closestHit, inout RTTriangle closestTriangle) {
+    for (int j = 0; j < ubo.nodesCount; j++) {
+        BVHNode node = bvhNodesIn[j];
+        if (node.triCount <= 0) continue;
+
+        for (uint i = 0; i < node.triCount; i++) {
+            RTTriangle triangle = trianglesIn[node.leftFirst + i];
+            HitInfo hitInfo = RayTriangle(ray, triangle);
+
+            if (hitInfo.didHit && ( closestHit.dist < 0 || hitInfo.dist < closestHit.dist )) {
+                closestHit = hitInfo;
+                closestTriangle = triangle;
+            }
+        }
+    }
+}
+
+/**
+ *  Checks every ray against every triangle. VERY slow...
+ */
+void RayAll(const Ray ray, inout HitInfo closestHit, inout RTTriangle closestTriangle) {
+    for (int i = 0; i < ubo.trianglesCount; i++) {
+        RTTriangle triangle = trianglesIn[i];
+        HitInfo hitInfo = RayTriangle(ray, triangle);
+
+        if (hitInfo.didHit && ( closestHit.dist < 0 || hitInfo.dist < closestHit.dist )) {
+            closestTriangle = triangle;
+            closestHit = hitInfo;
+        }
+    }
+}
+
+
 // --- Program ---
 layout (local_size_x = 32, local_size_y = 32, local_size_z = 1) in;
-void main()  {
+void main() {
     // Create seed for RNG
     vec2 uv = vec2( gl_GlobalInvocationID.x / ubo.screenSize.x, 1 - gl_GlobalInvocationID.y / ubo.screenSize.y );
     uint i = uint( gl_GlobalInvocationID.y * ubo.screenSize.x + gl_GlobalInvocationID.x );
@@ -419,15 +506,10 @@ void main()  {
         RTTriangle closestTriangle;
         HitInfo closestHit = HitInfo0;
         closestHit.dist = -1;
-        for (int i = 0; i < ubo.trianglesCount; i++) {
-            RTTriangle triangle = trianglesIn[i];
-            HitInfo hitInfo = RayTriangle(ray, triangle);
 
-            if (hitInfo.didHit && ( closestHit.dist < 0 || hitInfo.dist < closestHit.dist )) {
-                closestTriangle = triangle;
-                closestHit = hitInfo;
-            }
-        }
+        RayBVH(ray, closestHit, closestTriangle);
+        //RayAll(ray, closestHit, closestTriangle);
+        //RayAllBVH(ray, closestHit, closestTriangle);
 
         if (closestHit.didHit) {
             vec2 texcoord = closestTriangle.t1 * closestHit.localpos.x +

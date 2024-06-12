@@ -19,8 +19,7 @@
 #include <optional>
 #include <fstream>
 
-#include "tiny_obj_loader.h"
-#include <iostream>
+#include "bvh.hpp"
 
 #ifdef NDEBUG
 const bool enableValidationLayers = false;
@@ -169,43 +168,12 @@ public:
             }
         };
 
-        // Set up triangles
-        //load with tinyobjloader
-        std::vector<RTTriangle>             triangles {};
-        tinyobj::attrib_t                   attributes;
-        std::vector<tinyobj::shape_t>       shapes;
-        std::vector<tinyobj::material_t>    materials;
-        std::string                         warn, err;
-
-        const std::string path = "../resources/models/viking_room.obj";
-        if (!tinyobj::LoadObj(&attributes, &shapes, &materials, &warn, &err, path.c_str()))
-            throw std::runtime_error("ERR::VULKAN::RUN::FAILED_TO_LOAD_MODEL::" + warn + "::" + err);
-
-        for (const auto& shape : shapes) {
-            int i = 0;
-            glm::vec3 points[3];
-            glm::vec2 texcoords[3];
-            glm::vec3 normals[3];
-
-            for (const auto& index : shape.mesh.indices) {
-                float   px = attributes.vertices[3 * index.vertex_index + 0], py = attributes.vertices[3 * index.vertex_index + 1], pz = attributes.vertices[3 * index.vertex_index + 2],
-                        tx = attributes.texcoords[2 * index.texcoord_index + 0], ty = 1.0f - attributes.texcoords[2 * index.texcoord_index + 1],
-                        nx = attributes.normals[3 * index.normal_index + 0], ny = attributes.vertices[3 * index.normal_index + 1], nz = attributes.vertices[3 * index.normal_index + 2];
-
-                points[i]       = {-py, pz, -px};
-                normals[i]      = {-ny, nz, -nx};
-                texcoords[i]    = {tx, ty};
-
-                if (!(++i%=3)) {
-                    RTTriangle* triangle = new RTTriangle{};
-                    triangle->p0 = points[0]; triangle->p1 = points[1]; triangle->p2 = points[2];
-                    triangle->c = (points[0] + points[1] + points[2]) / 3.f;
-                    triangle->n0 = normals[0]; triangle->n1 = normals[1]; triangle->n2 = normals[2];
-                    triangle->t0 = texcoords[0]; triangle->t1 = texcoords[1]; triangle->t2 = texcoords[2];
-                    triangles.push_back(*triangle);
-                }
-            }
-        }
+        // Create BVH
+        BVH bvh = BVHBuilder()
+            .push("../resources/models/viking_room.obj")
+            .build();
+        std::vector<RTTriangle> bvhTriangles ( bvh.triangles, bvh.triangles + bvh.trianglesCount );
+        std::vector<BVHNode>    bvhNodes ( bvh.nodes, bvh.nodes + bvh.nodesCount );
 
         // Set up RTParams
         RTParams ubo{};
@@ -220,7 +188,8 @@ public:
         
         ubo.spheresCount = spheres.size();
         ubo.blackholesCount = blackholes.size();
-        ubo.trianglesCount = triangles.size();
+        ubo.trianglesCount = bvh.trianglesCount;
+        ubo.nodesCount = bvh.nodesCount;
 
         // Create buffers and layout
         computeBundle = BufferBuilder(physicalDevice, device, commandPool, computeQueue, &deletionQueue)
@@ -229,7 +198,8 @@ public:
             .SSBO(b_blackholes, VK_SHADER_STAGE_COMPUTE_BIT, blackholes)
             .genericImage(b_image, VK_SHADER_STAGE_COMPUTE_BIT, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, true, true, nullptr, nullptr, swapChainExtent.width, swapChainExtent.height)
             .sampler(b_skybox, VK_SHADER_STAGE_COMPUTE_BIT, "../resources/textures/texture.jpg")
-            .SSBO(b_triangles, VK_SHADER_STAGE_COMPUTE_BIT, triangles)
+            .SSBO(b_triangles, VK_SHADER_STAGE_COMPUTE_BIT, bvhTriangles)
+            .SSBO(b_bvhnodes, VK_SHADER_STAGE_COMPUTE_BIT, bvhNodes)
             .sampler(b_vikingroom, VK_SHADER_STAGE_COMPUTE_BIT, "../resources/textures/viking_room.png")
             .build();
 

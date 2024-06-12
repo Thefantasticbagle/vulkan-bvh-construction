@@ -32,7 +32,8 @@ START_BINDING( ComputeBindings )
 	b_image			= 3,
 	b_skybox		= 4,
 	b_triangles		= 5,
-	b_vikingroom	= 6
+	b_bvhnodes		= 6,
+	b_vikingroom	= 7
 END_BINDING();
 
 // --- Structs
@@ -64,7 +65,8 @@ struct RTParams {
     // Other
     uint    spheresCount,
             blackholesCount,
-			trianglesCount;
+			trianglesCount,
+			nodesCount;
 };
 
 /**
@@ -109,11 +111,10 @@ struct RTBlackhole {
  *	https://jacco.ompf2.com/2022/04/13/how-to-build-a-bvh-part-1-basics/
  */
 struct BVHNode {
+	uint		leftFirst,
+				triCount;
 	a16 vec3	aabbMin,
 				aabbMax;
-	a16 uint	leftFirst,
-				triCount;
-	bool isLeaf() { return triCount > 0; }
 };
 
 #endif
