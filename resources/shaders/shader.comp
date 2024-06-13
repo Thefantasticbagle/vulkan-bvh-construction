@@ -25,7 +25,7 @@ struct HitInfo {
     float       dist;
     vec3        pos;
     vec3        normal;
-    RTMaterial    material;
+    RTMaterial  material;
     vec3        localpos;
 };
 
@@ -33,6 +33,7 @@ struct HitInfo {
 struct Ray {
     vec3 origin;
     vec3 dir;
+    vec3 rdir;
     bool destroyed;
 };
 
@@ -224,11 +225,11 @@ bool RayBoundingBox(Ray ray, vec3 boxMin, vec3 boxMax) {
 //    return maxMinAxis <= minMaxAxis;
 
     // https://jacco.ompf2.com/2022/04/13/how-to-build-a-bvh-part-1-basics/
-	float tx1 = (boxMin.x - ray.origin.x) / ray.dir.x, tx2 = (boxMax.x - ray.origin.x) / ray.dir.x;
+	float tx1 = (boxMin.x - ray.origin.x) * ray.rdir.x, tx2 = (boxMax.x - ray.origin.x) * ray.rdir.x;
 	float tmin = min( tx1, tx2 ), tmax = max( tx1, tx2 );
-	float ty1 = (boxMin.y - ray.origin.y) / ray.dir.y, ty2 = (boxMax.y - ray.origin.y) / ray.dir.y;
+	float ty1 = (boxMin.y - ray.origin.y) * ray.rdir.y, ty2 = (boxMax.y - ray.origin.y) * ray.rdir.y;
 	tmin = max( tmin, min( ty1, ty2 ) ), tmax = min( tmax, max( ty1, ty2 ) );
-	float tz1 = (boxMin.z - ray.origin.z) / ray.dir.z, tz2 = (boxMax.z - ray.origin.z) / ray.dir.z;
+	float tz1 = (boxMin.z - ray.origin.z) * ray.rdir.z, tz2 = (boxMax.z - ray.origin.z) * ray.rdir.z;
 	tmin = max( tmin, min( tz1, tz2 ) ), tmax = min( tmax, max( tz1, tz2 ) );
 	return tmax >= tmin && tmin < 1e30f && tmax > 0;
 }
@@ -499,7 +500,7 @@ void main() {
 
         // Trace rays
         ray.origin = frame.cameraPos;
-        ray.dir = normalize(focusPointJittered - ray.origin);
+        ray.dir = normalize(focusPointJittered - ray.origin); ray.rdir = 1.0f / ray.dir;
         //totalIncomingLight += Trace(ray, seed);
 
         // TEMPORARY: Simple triangle check
