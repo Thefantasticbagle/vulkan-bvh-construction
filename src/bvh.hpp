@@ -46,42 +46,71 @@ public:
 	 *	Pushes a model from its file path.
 	 */
 	BVHBuilder push(const std::string path) {
+		std::vector<RTTriangle> triangles {};
+
+		// Load model based on extension
+		//load manually
+		if (path.substr(path.size() - 4) == ".tri") {
+			FILE* file = fopen(path.c_str(), "r");
+			float a, b, c, d, e, f, g, h, i;
+			for (int t = 0; t < 12582; t++) // Hardcoded amount of triangles for now.
+			{
+				fscanf(file, "%f %f %f %f %f %f %f %f %f\n",
+					&a, &b, &c, &d, &e, &f, &g, &h, &i);
+
+				RTTriangle* triangle = new RTTriangle;
+				triangle->p0 = glm::vec3(a, b, c);
+				triangle->p1 = glm::vec3(d, e, f);
+				triangle->p2 = glm::vec3(g, h, i);
+				triangle->c = (triangle->p0 + triangle->p1 + triangle->p2) / 3.0f;
+				triangles.push_back(*triangle);
+			}
+			fclose(file);
+		}
+
 		//load with tinyobjloader
-		std::vector<RTTriangle>             triangles {};
-        tinyobj::attrib_t                   attributes;
-        std::vector<tinyobj::shape_t>       shapes;
-        std::vector<tinyobj::material_t>    materials;
-        std::string                         warn, err;
+		else if (path.substr(path.size() - 4) == ".obj") {
+			tinyobj::attrib_t                   attributes;
+			std::vector<tinyobj::shape_t>       shapes;
+			std::vector<tinyobj::material_t>    materials;
+			std::string                         warn, err;
 
-        if (!tinyobj::LoadObj(&attributes, &shapes, &materials, &warn, &err, path.c_str()))
-            throw std::runtime_error("ERR::VULKAN::BVHBUILDER::PUSHMODELFROMPATH::FAILED_TO_LOAD_MODEL::" + warn + "::" + err);
+			if (!tinyobj::LoadObj(&attributes, &shapes, &materials, &warn, &err, path.c_str()))
+				throw std::runtime_error("ERR::VULKAN::BVHBUILDER::PUSHMODELFROMPATH::FAILED_TO_LOAD_MODEL::" + warn + "::" + err);
 
-        for (const auto& shape : shapes) {
-            int i = 0;
-            glm::vec3 points[3];
-            glm::vec2 texcoords[3];
-            glm::vec3 normals[3];
+			for (const auto& shape : shapes) {
+				int i = 0;
+				glm::vec3 points[3];
+				glm::vec2 texcoords[3];
+				glm::vec3 normals[3];
 
-            for (const auto& index : shape.mesh.indices) {
-                float   px = attributes.vertices[3 * index.vertex_index + 0], py = attributes.vertices[3 * index.vertex_index + 1], pz = attributes.vertices[3 * index.vertex_index + 2],
-                        tx = attributes.texcoords[2 * index.texcoord_index + 0], ty = 1.0f - attributes.texcoords[2 * index.texcoord_index + 1],
-                        nx = attributes.normals[3 * index.normal_index + 0], ny = attributes.vertices[3 * index.normal_index + 1], nz = attributes.vertices[3 * index.normal_index + 2];
+				for (const auto& index : shape.mesh.indices) {
+					float px, py, pz;
+					px = attributes.vertices[3 * index.vertex_index + 0], py = attributes.vertices[3 * index.vertex_index + 1], pz = attributes.vertices[3 * index.vertex_index + 2];
+					
+					float tx=0, ty=0, nx=0, ny=0, nz=0;
+					if (attributes.texcoords.size() > 0)
+						tx = attributes.texcoords[2 * index.texcoord_index + 0], ty = 1.0f - attributes.texcoords[2 * index.texcoord_index + 1];
+					if (attributes.normals.size() > 0)
+						nx = attributes.normals[3 * index.normal_index + 0], ny = attributes.normals[3 * index.normal_index + 1], nz = attributes.normals[3 * index.normal_index + 2];
 
-                points[i]       = {-py, pz, -px};
-                normals[i]      = {-ny, nz, -nx};
-                texcoords[i]    = {tx, ty};
+					points[i]       = {-py, pz, -px};
+					normals[i]      = {-ny, nz, -nx};
+					texcoords[i]    = {tx, ty};
 
-                if (!(++i%=3)) {
-                    RTTriangle* triangle = new RTTriangle{};
-                    triangle->p0 = points[0]; triangle->p1 = points[1]; triangle->p2 = points[2];
-                    triangle->c = (points[0] + points[1] + points[2]) / 3.f;
-                    triangle->n0 = normals[0]; triangle->n1 = normals[1]; triangle->n2 = normals[2];
-                    triangle->t0 = texcoords[0]; triangle->t1 = texcoords[1]; triangle->t2 = texcoords[2];
-                    triangles.push_back(*triangle);
-                }
-            }
-        }
+					if (!(++i%=3)) {
+						RTTriangle* triangle = new RTTriangle{};
+						triangle->p0 = points[0]; triangle->p1 = points[1]; triangle->p2 = points[2];
+						triangle->c = (points[0] + points[1] + points[2]) / 3.f;
+						triangle->n0 = normals[0]; triangle->n1 = normals[1]; triangle->n2 = normals[2];
+						triangle->t0 = texcoords[0]; triangle->t1 = texcoords[1]; triangle->t2 = texcoords[2];
+						triangles.push_back(*triangle);
+					}
+				}
+			}
+		}
 
+		// Push triangles
 		return push(triangles);
 	}
 
@@ -120,7 +149,19 @@ public:
 		bvh.nodesCount = nodesCount;
 
 		RTTriangle* trianglesSorted = new RTTriangle[trianglesCount];
-		for (int i = 0; i < trianglesCount; i++) trianglesSorted[i] = triangles[triangleIdx[i]];
+		
+		// TODO: Remove testing code
+		uint32_t nodeToShow = 6; // 0 = Show all, anything else = just load that node's triangles
+		if (nodeToShow == 0) for (int i = 0; i < trianglesCount; i++) trianglesSorted[i] = triangles[triangleIdx[i]];
+		else {
+			BVHNode& mNode = nodes[nodeToShow];
+			for (int i = 0; i < trianglesCount; i++) {
+				if (i >= mNode.leftFirst && i < mNode.leftFirst + mNode.triCount)
+					 trianglesSorted[i] = triangles[triangleIdx[i]];
+				else trianglesSorted[i] = RTTriangle{};
+			}
+		}
+
 		bvh.triangles = trianglesSorted;
 		bvh.trianglesCount = trianglesCount;
 
@@ -166,7 +207,7 @@ private:
 		BVHNode& node = nodes[nodeId];
 
 		// End clause
-		if (node.triCount <= 2) return;
+		if (node.triCount <= 3000) return;
 
 		// Determine axis and position of splitting plane
 		glm::vec3 extent = node.aabbMax - node.aabbMin;

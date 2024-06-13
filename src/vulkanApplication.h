@@ -170,7 +170,9 @@ public:
 
         // Create BVH
         BVH bvh = BVHBuilder()
-            .push("../resources/models/viking_room.obj")
+            //.push("../resources/models/dragon.obj")
+            .push("../resources/models/unity.tri")
+            //.push("../resources/models/viking_room.obj")
             .build();
         std::vector<RTTriangle> bvhTriangles ( bvh.triangles, bvh.triangles + bvh.trianglesCount );
         std::vector<BVHNode>    bvhNodes ( bvh.nodes, bvh.nodes + bvh.nodesCount );

@@ -72,10 +72,17 @@ layout(std140, binding = b_bvhnodes) readonly buffer BVHNodesSSBOIn {
    BVHNode bvhNodesIn [ ];
 };
 
-
 // Viking room texture
 layout(binding = b_vikingroom) uniform sampler2D vikingroomSampler;
 
+// --- Utility functions ---
+// https://www.shadertoy.com/view/XljGzV
+vec3 hsl2rgb( in vec3 c )
+{
+    vec3 rgb = clamp( abs(mod(c.x*6.0+vec3(0.0,4.0,2.0),6.0)-3.0)-1.0, 0.0, 1.0 );
+
+    return c.z + c.y * (rgb-0.5)*(1.0-abs(2.0*c.z-1.0));
+}
 
 // --- Randomness functions ---
 
@@ -212,7 +219,7 @@ HitInfo RaySphere(Ray ray, RTSphere sphere) {
  *
  * @return If the ray intersects the box at all.
  */
-bool RayBoundingBox(Ray ray, vec3 boxMin, vec3 boxMax) {
+bool RayBoundingBox(Ray ray, vec3 boxMin, vec3 boxMax, inout bool isEdge) {
 //    vec3    rayDirInverted = 1.0 / ray.dir,
 //            boxMinRelative = (boxMin - ray.origin) * rayDirInverted,
 //            boxMaxRelative = (boxMax - ray.origin) * rayDirInverted,
@@ -231,6 +238,8 @@ bool RayBoundingBox(Ray ray, vec3 boxMin, vec3 boxMax) {
 	tmin = max( tmin, min( ty1, ty2 ) ), tmax = min( tmax, max( ty1, ty2 ) );
 	float tz1 = (boxMin.z - ray.origin.z) * ray.rdir.z, tz2 = (boxMax.z - ray.origin.z) * ray.rdir.z;
 	tmin = max( tmin, min( tz1, tz2 ) ), tmax = min( tmax, max( tz1, tz2 ) );
+
+    if (tmax - tmin > -0.05f && tmax - tmin < 0.05f) isEdge = true;
 	return tmax >= tmin && tmin < 1e30f && tmax > 0;
 }
 
@@ -399,15 +408,17 @@ vec3 Trace(Ray ray, inout uint seed) {
 /**
  *  Traverses the BVH, checking for intersection against triangles.
  */
-void RayBVH(const Ray ray, inout HitInfo closestHit, inout RTTriangle closestTriangle) {
+void RayBVH(const Ray ray, inout HitInfo closestHit, inout RTTriangle closestTriangle, inout vec4 extra) {
     BVHNode node = bvhNodesIn[0], stack[64];
     uint stackPtr = 0;
 
     while (true) {
         // If ray misses node aabb, skip node
-        if (!RayBoundingBox(ray, node.aabbMin, node.aabbMax)) {
+        bool isEdge = false;
+        if (!RayBoundingBox(ray, node.aabbMin, node.aabbMax, isEdge)) {
             if (stackPtr == 0) break; else node = stack[--stackPtr]; continue;
         }
+        if (isEdge) extra = vec4( hsl2rgb(vec3(float(stackPtr) / 3.0f, 1, 0.5f)), 1 );
         
         if (node.triCount > 0) {
             // If the node is a leaf, intersect with primitive children
@@ -508,16 +519,28 @@ void main() {
         HitInfo closestHit = HitInfo0;
         closestHit.dist = -1;
 
-        RayBVH(ray, closestHit, closestTriangle);
+        // DEBUG OPTIONS
+        int visualizeBVH = 6; // -1 = none, 0 = all, other = specific node
+
+        vec4 extra = vec4(0);
+        RayBVH(ray, closestHit, closestTriangle, extra);
+        if (visualizeBVH == 0 && extra != vec4(0)) totalIncomingLight += extra.xyz;
+        else if (visualizeBVH > 0) {
+            bool isEdge = false;
+            BVHNode node = bvhNodesIn[visualizeBVH];
+            RayBoundingBox( ray, node.aabbMin, node.aabbMax, isEdge );
+            if (isEdge) totalIncomingLight += vec3(1,0,0);
+        }
+
         //RayAll(ray, closestHit, closestTriangle);
         //RayAllBVH(ray, closestHit, closestTriangle);
 
         if (closestHit.didHit) {
-            vec2 texcoord = closestTriangle.t1 * closestHit.localpos.x +
-                            closestTriangle.t2 * closestHit.localpos.y +
-                            closestTriangle.t0 * closestHit.localpos.z;
-            vec4 col = texture(vikingroomSampler, texcoord);
-            totalIncomingLight += col.xyz;
+//            vec2 texcoord = closestTriangle.t1 * closestHit.localpos.x +
+//                            closestTriangle.t2 * closestHit.localpos.y +
+//                            closestTriangle.t0 * closestHit.localpos.z;
+//            totalIncomingLight += texture(vikingroomSampler, texcoord);
+            totalIncomingLight += vec3(0,1,0);
         }
     }
     
