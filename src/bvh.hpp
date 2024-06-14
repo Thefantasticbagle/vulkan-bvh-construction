@@ -29,6 +29,10 @@ struct BVH {
 
 	uint32_t	nodesCount,
 				trianglesCount;
+
+	// Statistics
+	uint32_t	maxDepth = 0,
+				leafs = 0;
 };
 
 /**
@@ -147,11 +151,13 @@ public:
 		BVH bvh{};
 		bvh.nodes = nodes;
 		bvh.nodesCount = nodesCount;
+		bvh.maxDepth = maxDepth;
+		bvh.leafs = leafs;
 
 		RTTriangle* trianglesSorted = new RTTriangle[trianglesCount];
 		
 		// TODO: Remove testing code
-		uint32_t nodeToShow = 6; // 0 = Show all, anything else = just load that node's triangles
+		uint32_t nodeToShow = 0; // 0 = Show all, anything else = just load that node's triangles
 		if (nodeToShow == 0) for (int i = 0; i < trianglesCount; i++) trianglesSorted[i] = triangles[triangleIdx[i]];
 		else {
 			BVHNode& mNode = nodes[nodeToShow];
@@ -175,7 +181,9 @@ private:
 	BVHNode*				nodes;
 	uint32_t				rootNodeId,
 							nodesCount,
-							trianglesCount;
+							trianglesCount,
+							maxDepth = 0,
+							leafs = 0;
 
 	/**
 	 *	Updates the bounds of a given node.
@@ -201,13 +209,18 @@ private:
 	 *	Recursively subdivides the BVH.
 	 *	Rearranges triangleIdx and nodes.
 	 */
-	void subdivide(uint32_t nodeId) {
+	void subdivide(uint32_t nodeId, uint32_t depth = 0) {
+		if (depth > maxDepth) maxDepth = depth;
+
 		// Error handling
 		if (nodeId >= nodesCount) throw std::runtime_error("ERR::VULKAN::BVHBUILDER::SUBDIVIDE::NODE_ID_EXCEEDS_MAX");
 		BVHNode& node = nodes[nodeId];
 
 		// End clause
-		if (node.triCount <= 3000) return;
+		if (node.triCount <= 2) {
+			leafs++;
+			return;
+		}
 
 		// Determine axis and position of splitting plane
 		glm::vec3 extent = node.aabbMax - node.aabbMin;
@@ -245,7 +258,7 @@ private:
 		updateBounds( rightChildId );
 
 		// Recurse
-		subdivide( leftChildId );
-		subdivide( rightChildId );
+		subdivide( leftChildId, depth+1 );
+		subdivide( rightChildId, depth+1 );
 	}
 };

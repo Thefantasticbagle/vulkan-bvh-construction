@@ -169,6 +169,8 @@ public:
         };
 
         // Create BVH
+        std::cout << "--------------------------------" << std::endl;
+        std::cout << "Building BVH..." << std::endl;
         BVH bvh = BVHBuilder()
             //.push("../resources/models/dragon.obj")
             .push("../resources/models/unity.tri")
@@ -176,6 +178,14 @@ public:
             .build();
         std::vector<RTTriangle> bvhTriangles ( bvh.triangles, bvh.triangles + bvh.trianglesCount );
         std::vector<BVHNode>    bvhNodes ( bvh.nodes, bvh.nodes + bvh.nodesCount );
+        std::cout << "BVH Finished building! Statistics:" << std::endl;
+        std::cout << "\tAmount of triangles: " << bvhTriangles.size() << std::endl;
+        std::cout << "\tAmount of nodes: " << bvhNodes.size() << std::endl;
+        std::cout << "\tAmount of leaf nodes: " << bvh.leafs << std::endl;
+        std::cout << "\tDeepest node level: " << bvh.maxDepth << std::endl;
+        std::cout << "--------------------------------" << std::endl;
+
+        // Print statistics
 
         // Set up RTParams
         RTParams ubo{};
