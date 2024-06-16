@@ -520,7 +520,7 @@ void main() {
         closestHit.dist = -1;
 
         // DEBUG OPTIONS
-        int visualizeBVH = -1; // -1 = none, 0 = all, other = specific node
+        int visualizeBVH = 0; // -1 = none, 0 = all, other = specific node
 
         vec4 extra = vec4(0);
         RayBVH(ray, closestHit, closestTriangle, extra);

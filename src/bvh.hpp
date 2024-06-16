@@ -205,6 +205,42 @@ private:
 		}
 	}
 
+	/** 
+	 *	Evaluates the SAH score of a given split.
+	 */
+	float evaluateSAH(BVHNode& node, uint32_t axis, float split) {
+		// Error handling
+		if (node.triCount <= 0) throw std::runtime_error("ERR::VULKAN::BVHBUILDER::EVALUATESAH::NO_TRIANGLES");
+
+		// Declare fields
+		glm::vec3	aabbMinLeft = glm::vec3(1e30f), aabbMaxLeft = glm::vec3(-1e30f),
+					aabbMinRight = glm::vec3(1e30f), aabbMaxRight = glm::vec3(-1e30f);
+		uint32_t	countLeft = 0,
+					countRight = 0;
+
+		// Check if each triangle is on the left or right, then grow the corresponding aabb
+		for (uint32_t firstTriangle = node.leftFirst, i = 0; i < node.triCount; i++) {
+			RTTriangle& triangle = triangles[triangleIdx[firstTriangle + i]];
+			std::vector<glm::vec3> triangleVertices {triangle.p0, triangle.p1, triangle.p2};
+
+			if (triangle.c[axis] < split) {
+				for (auto vert : triangleVertices) { aabbMinLeft = glm::min(aabbMinLeft, vert); aabbMaxLeft = glm::max(aabbMaxLeft, vert); }
+				countLeft++;
+			}
+			else {
+				for (auto vert : triangleVertices) { aabbMinRight = glm::min(aabbMinRight, vert); aabbMaxRight = glm::max(aabbMaxRight, vert); }
+				countRight++;
+			}
+		}
+
+		// Calculate SAH and return
+		glm::vec3	extentLeft = aabbMaxLeft - aabbMinLeft,
+					extentRight = aabbMaxRight - aabbMinRight;
+		float		areaLeft = extentLeft.x * extentLeft.y + extentLeft.y * extentLeft.z + extentLeft.z * extentLeft.x,
+					areaRight = extentRight.x * extentRight.y + extentRight.y * extentRight.z + extentRight.z * extentRight.x;
+		return		areaLeft * countLeft + areaRight * countRight;
+	}
+
 	/**
 	 *	Recursively subdivides the BVH.
 	 *	Rearranges triangleIdx and nodes.
@@ -221,19 +257,44 @@ private:
 			leafs++;
 			return;
 		}
+		glm::vec3 extent = node.aabbMax - node.aabbMin;
 
 		// Determine axis and position of splitting plane
-		glm::vec3 extent = node.aabbMax - node.aabbMin;
-		uint32_t axis = 0; // 0 = x, 1 = y, 2 = z
-		if (extent.y > extent.x) axis = 1;
-		if (extent.z > extent[axis]) axis = 2;
-		float splitPos = node.aabbMin[axis] + extent[axis] * 0.5f;
+		//50%50 split
+		//uint32_t axis = 0; // 0 = x, 1 = y, 2 = z
+		//if (extent.y > extent.x) axis = 1;
+		//if (extent.z > extent[axis]) axis = 2;
+		//float splitPos = node.aabbMin[axis] + extent[axis] * 0.5f;
+
+		//SAH
+		std::cout << "A" << std::endl;
+		uint32_t SAHtests = 0; // 0 = test all, other = test that many splits
+		uint32_t bestAxis = 0;
+		float	 bestSplit, bestCost = 1e30f;
+		for (uint32_t axis = 0; axis < 3; axis++) {
+			if (SAHtests == 0) for (uint32_t firstTriangle = node.leftFirst, i = 0; i < node.triCount; i++) {
+				// For each axis and each triangle, evaluate SAH
+				RTTriangle& triangle = triangles[triangleIdx[firstTriangle + i]];
+				float		split = triangle.c[axis],
+							cost = evaluateSAH( node, axis, split );
+				if (cost < bestCost) { bestCost = cost; bestAxis = axis; bestSplit = split; }
+			}
+			else for (uint32_t i = 0; i < SAHtests; i++) {
+				float	split = node.aabbMin[axis] + extent[axis] * (float)i / (float)SAHtests,
+						cost = evaluateSAH(node, axis, split);
+				if (cost < bestCost) { bestCost = cost; bestAxis = axis; bestSplit = split; }
+			}
+		}
+		std::cout << "B" << std::endl;
+
+		float currentCost = node.triCount * (extent.x * extent.y + extent.y * extent.z + extent.z * extent.x);
+		if (bestCost >= currentCost) return;
 
 		// Quicksort triangles
 		int i = node.leftFirst,
 			j = node.leftFirst + node.triCount - 1;
 		while (i <= j) {
-			if (triangles[triangleIdx[i]].c[axis] < splitPos) i++;
+			if (triangles[triangleIdx[i]].c[bestAxis] < bestSplit) i++;
 			else std::swap(triangleIdx[i], triangleIdx[j--]);
 		}
 
