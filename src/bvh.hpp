@@ -260,7 +260,7 @@ private:
 		glm::vec3 extent = node.aabbMax - node.aabbMin;
 
 		// Determine axis and position of splitting plane
-		uint32_t SAHtests = 0; // 0 = test all, other = test that many splits
+		uint32_t SAHtests = 3; // 0 = test all, other = test that many splits
 		uint32_t bestAxis = 0;
 		float	 bestSplit, bestCost = 1e30f;
 		for (uint32_t axis = 0; axis < 3; axis++) {
@@ -272,7 +272,7 @@ private:
 				if (cost < bestCost) { bestCost = cost; bestAxis = axis; bestSplit = split; }
 			}
 			else for (uint32_t i = 0; i < SAHtests; i++) {
-				float	split = node.aabbMin[axis] + extent[axis] * (float)i / (float)SAHtests,
+				float	split = node.aabbMin[axis] + extent[axis] * (float)(i+1) / (float)(SAHtests+1),
 						cost = evaluateSAH(node, axis, split);
 				if (cost < bestCost) { bestCost = cost; bestAxis = axis; bestSplit = split; }
 			}
