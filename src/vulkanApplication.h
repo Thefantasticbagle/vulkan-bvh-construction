@@ -171,14 +171,17 @@ public:
         // Create BVH
         std::cout << "--------------------------------" << std::endl;
         std::cout << "Building BVH..." << std::endl;
+        double t0 = glfwGetTime();
         BVH bvh = BVHBuilder()
             //.push("../resources/models/dragon.obj")
             .push("../resources/models/unity.tri")
             //.push("../resources/models/viking_room.obj")
             .build();
+        double td = glfwGetTime() - t0;
         std::vector<RTTriangle> bvhTriangles ( bvh.triangles, bvh.triangles + bvh.trianglesCount );
         std::vector<BVHNode>    bvhNodes ( bvh.nodes, bvh.nodes + bvh.nodesCount );
-        std::cout << "BVH Finished building! Statistics:" << std::endl;
+        std::cout << "Finished building BVH!" << std::endl;
+        std::cout << "\tBuildtime: " << td << std::endl;
         std::cout << "\tAmount of triangles: " << bvhTriangles.size() << std::endl;
         std::cout << "\tAmount of nodes: " << bvhNodes.size() << std::endl;
         std::cout << "\tAmount of leaf nodes: " << bvh.leafs << std::endl;
@@ -230,64 +233,105 @@ public:
 
         createSyncObjects();
 
+        // Debug/performance testing
+        bool recording = true; // true to enable recording, which makes the camera do an orbit while recording the fps from different angles
+        if (recording) std::cout << "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\nRecording FPS from different angles..." << std::endl;
+
+        std::vector<float> fpsRecords {};
+        float       cameraOrbitRadius = 4.f,
+                    cameraOrbitAng = 0.f;
+        glm::vec3   cameraOrbitPoint { 0.f, 0.f, 0.f };
+
         while (!glfwWindowShouldClose(window)) {
             glfwPollEvents();
             drawFrame();
+             
+            if (recording && lastFrameTime != 0.f) {
+                // If recording, run pre-programmed render-loop
+                fpsRecords.push_back(1.f / lastFrameTime);
+                if (fpsRecords.size() > 1) {
+                    cameraOrbitAng += 2.f * glm::pi<float>() * lastFrameTime / 10.f;
+                    if (cameraOrbitAng >= glm::pi<float>() * 2.f) {
+                        recording = false;
+                    
+                        float   fpsAvgerage = 0.f,
+                                fpsMax = -1.f,
+                                fpsMin = -1.f;
+                        for (int i = 1; i < fpsRecords.size(); i++) {
+                            float fps = fpsRecords[i];
+                            fpsAvgerage += fps; 
+                            if (fpsMax <= 0.f || fps > fpsMax ) fpsMax = fps;
+                            if (fpsMin <= 0.f || fps < fpsMin ) fpsMin = fps; 
+                        } fpsAvgerage /= (float)fpsRecords.size();
 
-            float cameraRotationSpeed = 3.f;
-            float cameraSpeed = 3.f;
-            glm::vec3 dtAng = glm::zero<glm::vec3>();
-            glm::vec3 dtPos = glm::zero<glm::vec3>();
-            if (glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS) {
-                dtAng.y += lastFrameTime * cameraRotationSpeed;
+                        std::cout << "Recording complete!" << std::endl;
+                        std::cout << "Average FPS: " << fpsAvgerage << std::endl;
+                        std::cout << "Max FPS: " << fpsMax << std::endl;
+                        std::cout << "Min FPS: " << fpsMin << std::endl;
+                        std::cout << "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" << std::endl;
+                    }
+
+                    camera.ang.y = cameraOrbitAng + glm::pi<float>();
+                    camera.pos = cameraOrbitPoint + glm::vec3( glm::sin(cameraOrbitAng), 0, glm::cos(cameraOrbitAng) ) * cameraOrbitRadius;
+                    camera.calculateRTS();
+                }
             }
-            if (glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS) {
-                dtAng.y -= lastFrameTime * cameraRotationSpeed;
-            }
-            if (glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS) {
-                dtAng.x -= lastFrameTime * cameraRotationSpeed;
-            }
-            if (glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS) {
-                dtAng.x += lastFrameTime * cameraRotationSpeed;
-            }
-            if (glfwGetKey(window, GLFW_KEY_F) == GLFW_PRESS) {
-                printf("FPS = %i\n", (int)(1.f / lastFrameTime));
-            }
-            if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) {
-                dtPos -= camera.left * lastFrameTime * cameraSpeed;
-            }
-            if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) {
-                dtPos += camera.left * lastFrameTime * cameraSpeed;
-            }
-            if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) {
-                dtPos += camera.front * lastFrameTime * cameraSpeed;
-            }
-            if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) {
-                dtPos -= camera.front * lastFrameTime * cameraSpeed;
-            }
-            if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS) {
-                dtPos += camera.up * lastFrameTime * cameraSpeed;
-            }
-            if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS) {
-                dtPos -= camera.up * lastFrameTime * cameraSpeed;
+            else {
+                // If not recording, allow the user to move freely
+                float cameraRotationSpeed = 3.f;
+                float cameraSpeed = 3.f;
+                glm::vec3 dtAng = glm::zero<glm::vec3>();
+                glm::vec3 dtPos = glm::zero<glm::vec3>();
+                if (glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS) {
+                    dtAng.y += lastFrameTime * cameraRotationSpeed;
+                }
+                if (glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS) {
+                    dtAng.y -= lastFrameTime * cameraRotationSpeed;
+                }
+                if (glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS) {
+                    dtAng.x -= lastFrameTime * cameraRotationSpeed;
+                }
+                if (glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS) {
+                    dtAng.x += lastFrameTime * cameraRotationSpeed;
+                }
+                if (glfwGetKey(window, GLFW_KEY_F) == GLFW_PRESS) {
+                    printf("FPS = %i\n", (int)(1.f / lastFrameTime));
+                }
+                if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) {
+                    dtPos -= camera.left * lastFrameTime * cameraSpeed;
+                }
+                if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) {
+                    dtPos += camera.left * lastFrameTime * cameraSpeed;
+                }
+                if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) {
+                    dtPos += camera.front * lastFrameTime * cameraSpeed;
+                }
+                if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) {
+                    dtPos -= camera.front * lastFrameTime * cameraSpeed;
+                }
+                if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS) {
+                    dtPos += camera.up * lastFrameTime * cameraSpeed;
+                }
+                if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS) {
+                    dtPos -= camera.up * lastFrameTime * cameraSpeed;
+                }
+
+                if (glm::length(dtAng) > 0.f)
+                    camera.ang += dtAng;
+                if (glm::length(dtPos) > 0.f)
+                    camera.pos += dtPos;
+                if (glm::length(dtAng) > 0.f || glm::length(dtPos) > 0.f)
+                    camera.calculateRTS();
             }
 
-            if (glm::length(dtAng) > 0.f)
-                camera.ang += dtAng;
-            if (glm::length(dtPos) > 0.f)
-                camera.pos += dtPos;
-            if (glm::length(dtAng) > 0.f || glm::length(dtPos) > 0.f)
-                camera.calculateRTS();
-
-            frame.cameraPos = camera.pos;
-            frame.localToWorld = camera.rts;
-            frame.frameNumber++;
-
-            // Time
             double currentTime = glfwGetTime();
             lastFrameTime = currentTime - lastTime;
             lastTime = currentTime;
             totalTime += lastFrameTime;
+
+            frame.cameraPos = camera.pos;
+            frame.localToWorld = camera.rts;
+            frame.frameNumber++;
         }
 
         vkDeviceWaitIdle(device);
