@@ -169,8 +169,7 @@ public:
         };
 
         // Create BVH
-        std::cout << "--------------------------------" << std::endl;
-        std::cout << "Building BVH..." << std::endl;
+        std::cout << "\nBuilding BVH..." << std::endl;
         double t0 = glfwGetTime();
         BVH bvh = BVHBuilder()
             //.push("../resources/models/dragon.obj")
@@ -185,8 +184,7 @@ public:
         std::cout << "\tAmount of triangles: " << bvhTriangles.size() << std::endl;
         std::cout << "\tAmount of nodes: " << bvhNodes.size() << std::endl;
         std::cout << "\tAmount of leaf nodes: " << bvh.leafs << std::endl;
-        std::cout << "\tDeepest node level: " << bvh.maxDepth << std::endl;
-        std::cout << "--------------------------------" << std::endl;
+        std::cout << "\tDeepest node level: " << bvh.maxDepth << std::endl << std::endl;
 
         // Print statistics
 
@@ -235,7 +233,7 @@ public:
 
         // Debug/performance testing
         bool recording = true; // true to enable recording, which makes the camera do an orbit while recording the fps from different angles
-        if (recording) std::cout << "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\nRecording FPS from different angles..." << std::endl;
+        if (recording) std::cout << "\nRecording FPS from different angles..." << std::endl;
 
         std::vector<float> fpsRecords {};
         float       cameraOrbitRadius = 4.f,
@@ -267,8 +265,7 @@ public:
                         std::cout << "Recording complete!" << std::endl;
                         std::cout << "Average FPS: " << fpsAvgerage << std::endl;
                         std::cout << "Max FPS: " << fpsMax << std::endl;
-                        std::cout << "Min FPS: " << fpsMin << std::endl;
-                        std::cout << "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" << std::endl;
+                        std::cout << "Min FPS: " << fpsMin << std::endl << std::endl;
                     }
 
                     camera.ang.y = cameraOrbitAng + glm::pi<float>();
