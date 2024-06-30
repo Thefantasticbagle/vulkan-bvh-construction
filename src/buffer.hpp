@@ -43,6 +43,7 @@ struct BufferMemory {
     std::vector<VkBuffer>       buffers;
     std::vector<VkDeviceMemory> buffersMemory;
     std::vector<void*>          buffersMapped;
+    VkDeviceSize                size;
 };
 
 /**
@@ -133,12 +134,13 @@ public:
     ) : physicalDevice(physicalDevice), device(device), commandPool(commandPool), queue(queue), deletionQueue(deletionQueue) {}
 
     /**
-     *  Creates and adds a Uniform Buffer Object to the layout.
+     *  (Creates and) Adds a Uniform Buffer Object to the layout.
      *  Allocates memory and binds it to the appropriate fields in bufferMemories.
      * 
      *  @param binding Binding, as in shader-code.
      *  @param stageFlags Which stages the UBO should be visible to.
-     *  @param initialData Initial data.
+     *  @param existingBuffer An existing buffer to use. If left blank, creates one.
+     *  @param initialData Initial data for buffer creation.
      * 
      *  @return itself, for functional purposes.
      */
@@ -146,7 +148,8 @@ public:
     BufferBuilder UBO (
         uint32_t            binding,
         VkShaderStageFlags  stageFlags,
-        std::vector<T>      initialData
+        BufferMemory*       existingBuffer = nullptr,
+        std::vector<T>      initialData = std::vector<T>()
     ) {
         return genericBuffer<T>(
             binding,
@@ -154,17 +157,19 @@ public:
             VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
             VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
             true,
+            existingBuffer,
             initialData
         );
     };
 
     /**
-     *  Creates and adds a Uniform Buffer Object to the layout.
+     *  (Creates and) Adds a Shader Storage Buffer Object to the layout.
      *  Allocates memory and binds it to the appropriate fields in bufferMemories.
      * 
      *  @param binding Binding, as in shader-code.
-     *  @param stageFlags Which stages the UBO should be visible to.
-     *  @param initialData Initial data.
+     *  @param stageFlags Which stages the SSBO should be visible to.
+     *  @param existingBuffer An existing buffer to use. If left blank, creates one.
+     *  @param initialData Initial data for buffer creation.
      * 
      *  @return itself, for functional purposes.
      */
@@ -172,7 +177,8 @@ public:
     BufferBuilder SSBO (
         uint32_t            binding,
         VkShaderStageFlags  stageFlags,
-        std::vector<T>      initialData
+        BufferMemory*       existingBuffer = nullptr,
+        std::vector<T>      initialData = std::vector<T>()
     ) {
         return genericBuffer<T>(
             binding,
@@ -180,20 +186,23 @@ public:
             VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
             VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
             false,
+            existingBuffer,
             initialData
         );
     };
 
     /**
-     *  Creates and adds a buffer object to the layout.
+     *  (Creates and) Adds a buffer object to the layout.
      *  Allocates memory and binds it to the appropriate fields in bufferMemories.
+     *  UBO and SSBO are shorthands for this function.
      * 
      *  @param binding Binding, as in shader-code.
      *  @param stageFlags Which stages the buffer should be visible to.
      *  @param mainUsage The main usage of the buffer, i.e. VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT for Uniform Buffer Objects.
      *  @param isMapped Whether the buffer should be consistently mapped and host visible.
-     *  @param initialData The initial data of the buffer, if any.
-     *
+     *  @param existingBuffer An existing buffer to use. If left blank, creates one.
+     *  @param initialData Initial data for buffer creation.
+
      *  @return itself, for functional purposes.
      */
     template<typename T>
@@ -203,8 +212,15 @@ public:
         VkDescriptorType    type,
         VkBufferUsageFlags  mainUsage,
         bool                isMapped,
-        std::vector<T>      initialData
+        BufferMemory*       existingBuffer = nullptr,
+        std::vector<T>      initialData = std::vector<T>()
     ) {
+        // Early error catching
+        if (initialData.size() == 0 && existingBuffer == nullptr)
+            throw std::runtime_error("ERR::VULKAN::GENERIC_BUFFER::NO_INITIAL_OR_EXISTING_DATA");
+        else if (initialData.size() > 0 && existingBuffer != nullptr)
+            throw std::runtime_error("ERR::VULKAN::GENERIC_BUFFER::BOTH_INITIAL_AND_EXISTING_DATA");
+
         // Create and push layout bindings
         layoutBindings.push_back(
             VkDescriptorSetLayoutBinding{ binding, type, 1, stageFlags, nullptr }
@@ -213,32 +229,42 @@ public:
         // Add pool sizes
         addPoolSize(type);
 
-        // Create buffers
-        Buffer buffer (
-            mainUsage,
-            isMapped,
-            initialData,
-            physicalDevice,
-            device,
-            commandPool,
-            queue
-        );
-        BufferMemory bufferMemory { buffer.buffers, buffer.buffersMemory, buffer.buffersMapped };
-        bufferMemories[binding] = bufferMemory;
+        // If initial data is supplied, create a buffer for it
+        BufferMemory bufferMemory{};
+        if (initialData.size() > 0) {
+            Buffer buffer (
+                mainUsage,
+                isMapped,
+                initialData,
+                physicalDevice,
+                device,
+                commandPool,
+                queue
+            );
+            bufferMemory.buffers = buffer.buffers; 
+            bufferMemory.buffersMemory = buffer.buffersMemory; 
+            bufferMemory.buffersMapped = buffer.buffersMapped;
+            bufferMemory.size = buffer.size;
 
-        deletionQueue->addDeletor([=]() {
-            for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-                vkDestroyBuffer(device, bufferMemory.buffers[i], nullptr);
-                vkFreeMemory(device, bufferMemory.buffersMemory[i], nullptr);
-            }
-        });
+            deletionQueue->addDeletor([=]() {
+                for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+                    vkDestroyBuffer(device, bufferMemory.buffers[i], nullptr);
+                    vkFreeMemory(device, bufferMemory.buffersMemory[i], nullptr);
+                }
+            });
+        }
+        // Otherwise, if existing data (buffer) is supplied, use it
+        else if (existingBuffer != nullptr) {
+            bufferMemory = *existingBuffer;
+        }
 
         // Create and push descriptor writes
+        bufferMemories[binding] = bufferMemory;
         for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
             VkDescriptorBufferInfo *bufferInfo = new VkDescriptorBufferInfo {};
             bufferInfo->buffer = bufferMemory.buffers[i];
             bufferInfo->offset = 0;
-            bufferInfo->range = sizeof(T) * initialData.size();
+            bufferInfo->range = bufferMemory.size;
 
             VkWriteDescriptorSet write {};
             write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -320,6 +346,7 @@ public:
     /**
      *  (Creates and) Adds an image to the layout.
      *  Useful for creating images which are used for both storage and sampling.
+     *  sampler and storageImage are shorthands for this function.
      *  
      *  @param binding Binding, as in shader-code.
      *  @param stageFlags Which stages the buffer should be visible to.

@@ -19,6 +19,7 @@ public:
     std::vector<VkBuffer>       buffers;
     std::vector<VkDeviceMemory> buffersMemory;
     std::vector<void*>          buffersMapped;
+    VkDeviceSize                size;
 
     /**
      *  Complete constructor.
@@ -75,6 +76,7 @@ public:
         }
 
         // Create main buffers (and transfer data)
+        size = bufferSize;
         buffers.resize(MAX_FRAMES_IN_FLIGHT);
         buffersMemory.resize(MAX_FRAMES_IN_FLIGHT);
         for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {

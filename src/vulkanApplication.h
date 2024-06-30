@@ -205,19 +205,20 @@ public:
         ubo.nodesCount = bvh.nodesCount;
 
         // Create buffers and layout
-        computeBundle = BufferBuilder(physicalDevice, device, commandPool, computeQueue, &deletionQueue)
-            .UBO(b_params, VK_SHADER_STAGE_COMPUTE_BIT, std::vector<RTParams>{ubo})
-            .SSBO(b_spheres, VK_SHADER_STAGE_COMPUTE_BIT, spheres)
-            .SSBO(b_blackholes, VK_SHADER_STAGE_COMPUTE_BIT, blackholes)
-            .genericImage(b_image, VK_SHADER_STAGE_COMPUTE_BIT, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, true, true, nullptr, nullptr, swapChainExtent.width, swapChainExtent.height)
-            .sampler(b_skybox, VK_SHADER_STAGE_COMPUTE_BIT, "../resources/textures/texture.jpg")
-            .SSBO(b_triangles, VK_SHADER_STAGE_COMPUTE_BIT, bvhTriangles)
-            .SSBO(b_bvhnodes, VK_SHADER_STAGE_COMPUTE_BIT, bvhNodes)
-            .sampler(b_vikingroom, VK_SHADER_STAGE_COMPUTE_BIT, "../resources/textures/viking_room.png")
+        asbuildBundle = BufferBuilder(physicalDevice, device, commandPool, computeQueue, &deletionQueue)
+            .SSBO(b_triangles, VK_SHADER_STAGE_COMPUTE_BIT, nullptr, bvhTriangles)
+            .SSBO(b_bvhnodes, VK_SHADER_STAGE_COMPUTE_BIT, nullptr, bvhNodes)
             .build();
 
-        asbuildBundle = BufferBuilder(physicalDevice, device, commandPool, computeQueue, &deletionQueue)
-            .genericImage(0, VK_SHADER_STAGE_COMPUTE_BIT, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, false, true, nullptr, &computeBundle.imageMemories[b_image])
+        computeBundle = BufferBuilder(physicalDevice, device, commandPool, computeQueue, &deletionQueue)
+            .UBO(b_params, VK_SHADER_STAGE_COMPUTE_BIT, nullptr, std::vector<RTParams>{ubo})
+            .SSBO(b_spheres, VK_SHADER_STAGE_COMPUTE_BIT, nullptr, spheres)
+            .SSBO(b_blackholes, VK_SHADER_STAGE_COMPUTE_BIT, nullptr, blackholes)
+            .genericImage(b_image, VK_SHADER_STAGE_COMPUTE_BIT, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, true, true, nullptr, nullptr, swapChainExtent.width, swapChainExtent.height)
+            .sampler(b_skybox, VK_SHADER_STAGE_COMPUTE_BIT, "../resources/textures/texture.jpg")
+            .SSBO<RTTriangle>(b_triangles, VK_SHADER_STAGE_COMPUTE_BIT, &asbuildBundle.bufferMemories[b_triangles])
+            .SSBO<BVHNode>(b_bvhnodes, VK_SHADER_STAGE_COMPUTE_BIT, &asbuildBundle.bufferMemories[b_bvhnodes])
+            .sampler(b_vikingroom, VK_SHADER_STAGE_COMPUTE_BIT, "../resources/textures/viking_room.png")
             .build();
 
         graphicsBundle = BufferBuilder(physicalDevice, device, commandPool, graphicsQueue, &deletionQueue)

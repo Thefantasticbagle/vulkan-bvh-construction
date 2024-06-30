@@ -8,7 +8,14 @@
 
 
 // Output storage image
-layout (binding = 0, rgba8) writeonly uniform image2D image;
+layout(std140, binding = b_triangles) readonly buffer TriangleSSBOIn {
+   RTTriangle trianglesIn [ ];
+};
+
+// BVH nodes
+layout(std140, binding = b_bvhnodes) buffer BVHNodesSSBOOut {
+   BVHNode bvhNodesOut [ ];
+};
 
 uint randInt(inout uint seed) {
     seed = seed * 747796405 + 2891336453;
@@ -34,9 +41,13 @@ void main() {
 	uint j = 0;
 	uint seed = uint(id);
 	
+	uint lf = bvhNodesOut[0].leftFirst;
 	for (int i = 0; i < 1000; i++){
-		j += collatz(randInt(seed));
+		uint c = collatz(randInt(seed));
+		j += c;
+		lf -= c;
 	}
 
-	imageStore(image, ivec2(gl_GlobalInvocationID.xy), vec4( j, 0, 0, 1 ));
+	lf += j;
+	bvhNodesOut[0].leftFirst = lf;
 }
