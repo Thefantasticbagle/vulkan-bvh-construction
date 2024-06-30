@@ -1,27 +1,49 @@
 #include "vulkanApplication.h"
 
 void VulkanApplication::drawFrame() {
-    VkSubmitInfo submitInfo{};
-    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-
-    // --- Compute
-    // Wait for previous compute iteration
+    // --- Compute & AS Build
+    // Wait until previous iteration of current in-flight-frame is finished
     VkResult res = vkWaitForFences(device, 1, &computeInFlightFences[currentFrame], VK_TRUE, UINT64_MAX);
-    if (res != VK_SUCCESS)
-        throw std::runtime_error("ERR::VULKAN::DRAW_FRAME::UNEXPECTED_WAIT_ERROR");
-
-    // Reset fences before commiting new commands
+    if (res != VK_SUCCESS) throw std::runtime_error("ERR::VULKAN::DRAW_FRAME::UNEXPECTED_WAIT_ERROR");
     vkResetFences(device, 1, &computeInFlightFences[currentFrame]);
 
-    vkResetCommandBuffer(computeCommandBuffers[currentFrame], 0);
-    recordComputeCommandBuffer(computeCommandBuffers[currentFrame]);
+    // Reset command buffer and record acceleration build commands
+    VkCommandBuffer computeBuffer = computeCommandBuffers[currentFrame];
 
+    vkResetCommandBuffer( computeBuffer, 0 );
+    VkCommandBufferBeginInfo beginInfo{};
+    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    if (vkBeginCommandBuffer( computeBuffer, &beginInfo ) != VK_SUCCESS)
+        throw std::runtime_error("ERR::VULKAN::DRAW_FRAME::COMMAND_BUFFER_BEGIN_FAILED");
+
+    recordAsbuildCommandBuffer( computeBuffer );
+
+    // Insert barrier to make sure AS build has completed writing to storage buffers before tracing begins
+    VkMemoryBarrier2KHR asbuildComputeBarrier{};
+    asbuildComputeBarrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2_KHR;
+    asbuildComputeBarrier.srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT_KHR;
+    asbuildComputeBarrier.srcAccessMask = VK_ACCESS_2_SHADER_WRITE_BIT_KHR;
+    asbuildComputeBarrier.dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT_KHR;
+    asbuildComputeBarrier.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT_KHR;
+
+    VkDependencyInfoKHR dependencyInfo{};
+    dependencyInfo.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO_KHR;
+    dependencyInfo.memoryBarrierCount = 1;
+    dependencyInfo.pMemoryBarriers = &asbuildComputeBarrier;
+    vkCmdPipelineBarrier2( computeBuffer, &dependencyInfo );
+
+    // Record trace commands and commit
+    recordComputeCommandBuffer( computeBuffer );
+    if (vkEndCommandBuffer( computeBuffer ) != VK_SUCCESS)
+        throw std::runtime_error("ERR::VULKAN::DRAW_FRAME::COMMAND_BUFFER_COMMIT_FAILED");
+
+    VkSubmitInfo submitInfo{};
+    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
     submitInfo.commandBufferCount = 1;
-    submitInfo.pCommandBuffers = &computeCommandBuffers[currentFrame];
+    submitInfo.pCommandBuffers = &computeBuffer;
     submitInfo.signalSemaphoreCount = 1;
     submitInfo.pSignalSemaphores = &computeFinishedSemaphores[currentFrame];
-
-    if (vkQueueSubmit(computeQueue, 1, &submitInfo, computeInFlightFences[currentFrame]) != VK_SUCCESS)
+    if (vkQueueSubmit( computeQueue, 1, &submitInfo, computeInFlightFences[currentFrame] ) != VK_SUCCESS)
         throw std::runtime_error("ERR::VULKAN::DRAW_FRAME::SUBMIT_COMPUTE_QUEUE_FAILED");
     
     // --- Graphics

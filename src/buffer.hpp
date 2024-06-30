@@ -116,6 +116,8 @@ struct BufferBundle {
 /**
  *  Class for creating and building buffer objects into a fully compiled BufferBundle.
  *  Handles creation and deletion of said objects. Last step is always to build().
+ * 
+ *  TODO: Move away from single use command buffers, this should probably use a buffer from its corresponding pipeline.
  */
 class BufferBuilder {
 public:

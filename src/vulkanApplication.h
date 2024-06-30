@@ -216,6 +216,10 @@ public:
             .sampler(b_vikingroom, VK_SHADER_STAGE_COMPUTE_BIT, "../resources/textures/viking_room.png")
             .build();
 
+        asbuildBundle = BufferBuilder(physicalDevice, device, commandPool, computeQueue, &deletionQueue)
+            .genericImage(0, VK_SHADER_STAGE_COMPUTE_BIT, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, false, true, nullptr, &computeBundle.imageMemories[b_image])
+            .build();
+
         graphicsBundle = BufferBuilder(physicalDevice, device, commandPool, graphicsQueue, &deletionQueue)
             .sampler(0, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr, &computeBundle.imageMemories[b_image])
             .build();
@@ -226,6 +230,7 @@ public:
         createComputeCommandBuffers();
         createGraphicsCommandBuffers();
 
+        createAsbuildPipeline();
         createGraphicsPipeline();
         createComputePipeline();
 
@@ -370,14 +375,16 @@ private:
     VkCommandPool commandPool;
 
     // Buffers and layout
+    BufferBundle asbuildBundle;
     BufferBundle computeBundle;
     BufferBundle graphicsBundle;
 
-    // Graphics
-    VkRenderPass                    renderPass;
-    VkPipelineLayout                graphicsPipelineLayout;
-    VkPipeline                      graphicsPipeline;
-    std::vector<VkCommandBuffer>    graphicsCommandBuffers;
+    // Acceleration structure build
+    VkPipelineLayout                asbuildPipelineLayout;
+    VkPipeline                      asbuildPipeline;
+    //std::vector<VkCommandBuffer>    asbuildCommandBuffers;
+    void*                           asbuildPushConstantReference = nullptr;
+    uint32_t                        asbuildPushConstantSize = 0;
 
     // Compute
     VkPipelineLayout                computePipelineLayout;
@@ -385,6 +392,12 @@ private:
     std::vector<VkCommandBuffer>    computeCommandBuffers;
     void*                           computePushConstantReference = nullptr;
     uint32_t                        computePushConstantSize = 0;
+
+    // Graphics
+    VkRenderPass                    renderPass;
+    VkPipelineLayout                graphicsPipelineLayout;
+    VkPipeline                      graphicsPipeline;
+    std::vector<VkCommandBuffer>    graphicsCommandBuffers;
 
     // Synchronization
     std::vector<VkSemaphore>    imageAvailableSemaphores;
@@ -451,10 +464,12 @@ private:
 
     void createRenderPass();
     void createGraphicsPipeline();
+    void createAsbuildPipeline();
     void createComputePipeline();
 
-    void recordGraphicsCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+    void recordAsbuildCommandBuffer(VkCommandBuffer commandBuffer);
     void recordComputeCommandBuffer(VkCommandBuffer commandBuffer);
+    void recordGraphicsCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 
     void createSyncObjects();
     void drawFrame();

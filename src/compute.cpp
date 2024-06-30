@@ -55,18 +55,6 @@ void VulkanApplication::createComputePipeline() {
  *  Records the command buffer for Compute.
  */
 void VulkanApplication::recordComputeCommandBuffer(VkCommandBuffer commandBuffer) {
-    // Supply details about the usage of this specific command buffer
-    VkCommandBufferBeginInfo beginInfo{};
-    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-    // VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT      - Record after executing once.
-    // VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT - Secondary command buffer which is entirely contained by a single render pass.
-    // VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT     - Can be resubmitted WHILE pending execution.
-    beginInfo.flags = 0; // Optional
-    beginInfo.pInheritanceInfo = nullptr; // Optional
-
-    if (vkBeginCommandBuffer(commandBuffer, &beginInfo) != VK_SUCCESS)
-        throw std::runtime_error("ERR::VULKAN::RECORD_COMPUTE_COMMAND_BUFFER::COMMAND_BUFFER_BEGIN_FAILED");
-
     // Bind pipeline
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, computePipeline);
     vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, computePipelineLayout, 0, 1, &computeBundle.descriptorSets[currentFrame], 0, nullptr);
@@ -75,8 +63,5 @@ void VulkanApplication::recordComputeCommandBuffer(VkCommandBuffer commandBuffer
     vkCmdPushConstants(commandBuffer, computePipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, computePushConstantSize, (RTFrame*)computePushConstantReference);
 
     // Dispatch and commit
-    //vkCmdDispatch(commandBuffer, static_cast<uint32_t>(swapChainExtent.width), static_cast<uint32_t>(swapChainExtent.height), 1); // TODO: ADD PARTICLE_COUNT VARIABLE
-    vkCmdDispatch(commandBuffer, WIDTH / 32, HEIGHT / 32, 1); // TODO: ADD PARTICLE_COUNT VARIABLE
-    if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS)
-        throw std::runtime_error("ERR::VULKAN::RECORD_COMPUTE_COMMAND_BUFFER::COMMIT_FAILED");
+    vkCmdDispatch(commandBuffer, WIDTH / 32, HEIGHT / 32, 1);
 }

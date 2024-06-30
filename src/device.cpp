@@ -52,6 +52,7 @@ bool VulkanApplication::isDeviceSuitable(VkPhysicalDevice device) {
     vkGetPhysicalDeviceFeatures(device, &supportedFeatures);
     bool isValid = indices.isComplete() && extensionsSupported && swapChainAdequate && supportedFeatures.samplerAnisotropy;
 
+    // Check against acceleration feature MANUALLY (TODO: FIX)
     VkPhysicalDeviceAccelerationStructureFeaturesKHR accelFeatures{};
     accelFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR;
     VkPhysicalDeviceFeatures2 supportedFeatures2;
@@ -59,6 +60,8 @@ bool VulkanApplication::isDeviceSuitable(VkPhysicalDevice device) {
     supportedFeatures2.pNext = &accelFeatures;
     vkGetPhysicalDeviceFeatures2(device, &supportedFeatures2);
     isValid &= accelFeatures.accelerationStructure;
+
+    // TODO: Do this with other required features too...
 
     // (Also, for now, require that a DEDICATED GPU is used)
     VkPhysicalDeviceProperties props;
@@ -154,9 +157,14 @@ void VulkanApplication::createLogicalDevice() {
     //VkPhysicalDeviceFeatures deviceFeatures{};
     //deviceFeatures.samplerAnisotropy = VK_TRUE;
 
+    VkPhysicalDeviceSynchronization2FeaturesKHR synchronizationFeatures{};
+    synchronizationFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES_KHR;
+    synchronizationFeatures.synchronization2 = VK_TRUE;
+
     VkPhysicalDeviceAccelerationStructureFeaturesKHR accelFeatures{};
     accelFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR;
     accelFeatures.accelerationStructure = VK_TRUE;
+    accelFeatures.pNext = &synchronizationFeatures;
 
     VkPhysicalDeviceBufferDeviceAddressFeatures deviceFeatures{};
     deviceFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES_KHR;

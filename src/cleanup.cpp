@@ -6,6 +6,9 @@ void VulkanApplication::cleanup() {
     cleanupSwapChain();
 
     //pipeline
+    vkDestroyPipeline(device, asbuildPipeline, nullptr);
+    vkDestroyPipelineLayout(device, asbuildPipelineLayout, nullptr);
+
     vkDestroyPipeline(device, graphicsPipeline, nullptr);
     vkDestroyPipelineLayout(device, graphicsPipelineLayout, nullptr);
 
