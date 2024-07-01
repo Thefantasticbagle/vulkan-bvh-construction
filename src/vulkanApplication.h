@@ -178,6 +178,7 @@ public:
             .build();
         double td = glfwGetTime() - t0;
         std::vector<RTTriangle> bvhTriangles ( bvh.triangles, bvh.triangles + bvh.trianglesCount );
+        std::vector<uint32_t>   bvhTrianglesIdx ( bvh.trianglesIdx, bvh.trianglesIdx + bvh.trianglesCount );
         std::vector<BVHNode>    bvhNodes ( bvh.nodes, bvh.nodes + bvh.nodesCount );
         std::cout << "Finished building BVH!" << std::endl;
         std::cout << "\tBuildtime: " << td << std::endl;
@@ -207,6 +208,7 @@ public:
         // Create buffers and layout
         asbuildBundle = BufferBuilder(physicalDevice, device, commandPool, computeQueue, &deletionQueue)
             .SSBO(b_triangles, VK_SHADER_STAGE_COMPUTE_BIT, nullptr, bvhTriangles)
+            .SSBO(b_triangles_idx, VK_SHADER_STAGE_COMPUTE_BIT, nullptr, bvhTrianglesIdx)
             .SSBO(b_bvhnodes, VK_SHADER_STAGE_COMPUTE_BIT, nullptr, bvhNodes)
             .build();
 
@@ -217,6 +219,7 @@ public:
             .genericImage(b_image, VK_SHADER_STAGE_COMPUTE_BIT, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, true, true, nullptr, nullptr, swapChainExtent.width, swapChainExtent.height)
             .sampler(b_skybox, VK_SHADER_STAGE_COMPUTE_BIT, "../resources/textures/texture.jpg")
             .SSBO<RTTriangle>(b_triangles, VK_SHADER_STAGE_COMPUTE_BIT, &asbuildBundle.bufferMemories[b_triangles])
+            .SSBO<uint32_t>(b_triangles_idx, VK_SHADER_STAGE_COMPUTE_BIT, &asbuildBundle.bufferMemories[b_triangles_idx])
             .SSBO<BVHNode>(b_bvhnodes, VK_SHADER_STAGE_COMPUTE_BIT, &asbuildBundle.bufferMemories[b_bvhnodes])
             .sampler(b_vikingroom, VK_SHADER_STAGE_COMPUTE_BIT, "../resources/textures/viking_room.png")
             .build();

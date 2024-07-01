@@ -67,6 +67,10 @@ layout(std140, binding = b_triangles) readonly buffer TriangleSSBOIn {
    RTTriangle trianglesIn [ ];
 };
 
+layout(std430, binding = b_triangles_idx) readonly buffer TriangleIdxSSBOIn {
+   uint trianglesIdxIn [ ];
+};
+
 // BVH nodes
 layout(std140, binding = b_bvhnodes) readonly buffer BVHNodesSSBOIn {
    BVHNode bvhNodesIn [ ];
@@ -423,7 +427,7 @@ void RayBVH(const Ray ray, inout HitInfo closestHit, inout RTTriangle closestTri
         if (node.triCount > 0) {
             // If the node is a leaf, intersect with primitive children
             for (int i = 0; i < node.triCount; i++) {
-                RTTriangle triangle = trianglesIn[node.leftFirst + i];
+                RTTriangle triangle = trianglesIn[trianglesIdxIn[node.leftFirst + i]];
                 HitInfo hitInfo = RayTriangle(ray, triangle);
 
                 if (hitInfo.didHit && ( closestHit.dist < 0 || hitInfo.dist < closestHit.dist )) {
@@ -445,6 +449,7 @@ void RayBVH(const Ray ray, inout HitInfo closestHit, inout RTTriangle closestTri
 
 /**
  *  Checks every ray against every bvh, regardless of hierarchy. Slow.
+ *  DEPRECATED.
  */
 void RayAllBVH(const Ray ray, inout HitInfo closestHit, inout RTTriangle closestTriangle) {
     for (int j = 0; j < ubo.nodesCount; j++) {
@@ -465,6 +470,7 @@ void RayAllBVH(const Ray ray, inout HitInfo closestHit, inout RTTriangle closest
 
 /**
  *  Checks every ray against every triangle. VERY slow...
+ *  DEPRECATED.
  */
 void RayAll(const Ray ray, inout HitInfo closestHit, inout RTTriangle closestTriangle) {
     for (int i = 0; i < ubo.trianglesCount; i++) {

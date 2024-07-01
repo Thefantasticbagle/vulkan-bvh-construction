@@ -26,6 +26,7 @@
 struct BVH {
 	BVHNode*	nodes;
 	RTTriangle* triangles;
+	uint32_t*	trianglesIdx;
 
 	uint32_t	nodesCount,
 				trianglesCount;
@@ -156,22 +157,25 @@ public:
 
 		RTTriangle* trianglesSorted = new RTTriangle[trianglesCount];
 		
-		// TODO: Remove testing code
-		uint32_t nodeToShow = 0; // 0 = Show all, anything else = just load that node's triangles
-		if (nodeToShow == 0) for (int i = 0; i < trianglesCount; i++) trianglesSorted[i] = triangles[triangleIdx[i]];
-		else {
-			BVHNode& mNode = nodes[nodeToShow];
-			for (int i = 0; i < trianglesCount; i++) {
-				if (i >= mNode.leftFirst && i < mNode.leftFirst + mNode.triCount)
-					 trianglesSorted[i] = triangles[triangleIdx[i]];
-				else trianglesSorted[i] = RTTriangle{};
-			}
+		//uint32_t nodeToShow = 0; // 0 = Show all, anything else = just load that node's triangles
+		//if (nodeToShow == 0) for (int i = 0; i < trianglesCount; i++) trianglesSorted[i] = triangles[triangleIdx[i]];
+		//else {
+		//	BVHNode& mNode = nodes[nodeToShow];
+		//	for (int i = 0; i < trianglesCount; i++) {
+		//		if (i >= mNode.leftFirst && i < mNode.leftFirst + mNode.triCount)
+		//			 trianglesSorted[i] = triangles[triangleIdx[i]];
+		//		else trianglesSorted[i] = RTTriangle{};
+		//	}
+		//}		
+
+		for (int i = 0; i < trianglesCount; i++) {
+			trianglesSorted[i] = triangles[i];
 		}
 
 		bvh.triangles = trianglesSorted;
 		bvh.trianglesCount = trianglesCount;
+		bvh.trianglesIdx = triangleIdx; //delete triangleIdx;
 
-		delete triangleIdx;
 		return bvh;
 	}
 

@@ -12,6 +12,10 @@ layout(std140, binding = b_triangles) readonly buffer TriangleSSBOIn {
    RTTriangle trianglesIn [ ];
 };
 
+layout(std430, binding = b_triangles_idx) readonly buffer TriangleIdxSSBOIn {
+   uint trianglesIdxIn [ ];
+};
+
 // BVH nodes
 layout(std140, binding = b_bvhnodes) buffer BVHNodesSSBOOut {
    BVHNode bvhNodesOut [ ];
@@ -49,5 +53,5 @@ void main() {
 	}
 
 	lf += j;
-	bvhNodesOut[0].leftFirst = lf;
+	//bvhNodesOut[0].leftFirst = lf;
 }
