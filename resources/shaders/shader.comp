@@ -414,7 +414,8 @@ vec3 Trace(Ray ray, inout uint seed) {
  */
 void RayBVH(const Ray ray, inout HitInfo closestHit, inout RTTriangle closestTriangle, inout vec4 extra) {
     BVHNode node = bvhNodesIn[0], stack[64];
-    uint stackPtr = 0;
+    uint    stackPtr = 0,
+            maxDepth = 0;
 
     while (true) {
         // If ray misses node aabb, skip node
@@ -422,8 +423,11 @@ void RayBVH(const Ray ray, inout HitInfo closestHit, inout RTTriangle closestTri
         if (!RayBoundingBox(ray, node.aabbMin, node.aabbMax, isEdge)) {
             if (stackPtr == 0) break; else node = stack[--stackPtr]; continue;
         }
-        if (isEdge) extra = vec4( hsl2rgb(vec3(float(stackPtr) / 3.0f, 1, 0.5f)), 1 );
-        
+
+        // BVH Edge viz
+        if (extra == vec4(0) && isEdge) extra = vec4( hsl2rgb(vec3(float(stackPtr) / 3.0f, 1, 0.5f)), 1 );
+        else maxDepth = max(maxDepth, stackPtr+1);
+
         if (node.triCount > 0) {
             // If the node is a leaf, intersect with primitive children
             for (int i = 0; i < node.triCount; i++) {
@@ -444,6 +448,8 @@ void RayBVH(const Ray ray, inout HitInfo closestHit, inout RTTriangle closestTri
         node = bvhNodesIn[node.leftFirst];
     }
 
+    // BVH Depth viz
+    if (extra == vec4(1)) extra = vec4( hsl2rgb(vec3(float(maxDepth) / 30.0f, 1, 0.5f)), 1 );
     return;
 }
 
@@ -526,9 +532,9 @@ void main() {
         closestHit.dist = -1;
 
         // DEBUG OPTIONS
-        int visualizeBVH = -1; // -1 = none, 0 = all, other = specific node
+        int visualizeBVH = 0; // -1 = none, 0 = all, other = specific node
+        vec4 extra = vec4(1); // 0 = edges, 1 = depth
 
-        vec4 extra = vec4(0);
         RayBVH(ray, closestHit, closestTriangle, extra);
         if (visualizeBVH == 0 && extra != vec4(0)) totalIncomingLight += extra.xyz;
         else if (visualizeBVH > 0) {
